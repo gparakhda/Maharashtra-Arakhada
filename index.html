@@ -1,0 +1,1084 @@
+<!DOCTYPE html>
+<html lang="mr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<title>ग्रामपंचायत कार्य व्यवस्थापन</title>
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#0f6e4f">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/exceljs@4.4.0/dist/exceljs.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+<script src="notoDevanagariFont.js"></script>
+<style>
+:root{
+  --primary:#0f6e4f; --primary-dark:#0a4d37; --accent:#f2a30f;
+  --bg:#f4f7f5; --card:#ffffff; --text:#1c2b25; --muted:#6b7c74;
+  --border:#e1e8e4; --danger:#c0392b; --radius:14px;
+}
+*{box-sizing:border-box;}
+body{margin:0;font-family:'Noto Sans Devanagari','Segoe UI',sans-serif;background:var(--bg);color:var(--text);}
+header.app-header{background:linear-gradient(135deg,var(--primary),var(--primary-dark));color:#fff;
+  padding:16px 20px;display:flex;align-items:center;gap:12px;box-shadow:0 2px 10px rgba(0,0,0,.15);position:sticky;top:0;z-index:50;}
+header.app-header img{height:42px;width:42px;border-radius:8px;background:#fff;object-fit:contain;}
+header.app-header .titles h1{font-size:17px;margin:0;font-weight:700;}
+header.app-header .titles p{font-size:12px;margin:2px 0 0;opacity:.85;}
+.container{max-width:640px;margin:0 auto;padding:16px;}
+.card{background:var(--card);border-radius:var(--radius);padding:18px;margin-bottom:16px;box-shadow:0 1px 4px rgba(0,0,0,.06);border:1px solid var(--border);}
+.card h2{font-size:15px;margin:0 0 14px;color:var(--primary-dark);display:flex;align-items:center;gap:8px;}
+label{display:block;font-size:13px;color:var(--muted);margin:10px 0 4px;font-weight:600;}
+input,select{width:100%;padding:12px;border:1.5px solid var(--border);border-radius:10px;font-size:15px;background:#fbfcfb;color:var(--text);}
+input:focus,select:focus{outline:none;border-color:var(--primary);}
+button{cursor:pointer;border:none;border-radius:10px;font-weight:700;font-size:15px;padding:13px 18px;transition:.15s;}
+.btn-primary{background:var(--primary);color:#fff;width:100%;}
+.btn-primary:hover{background:var(--primary-dark);}
+.btn-outline{background:#fff;color:var(--primary);border:1.5px solid var(--primary);width:100%;}
+.btn-accent{background:var(--accent);color:#3a2600;width:100%;}
+.btn-row{display:flex;gap:10px;}
+.btn-row button{flex:1;}
+.hidden{display:none !important;}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
+.grid3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;}
+#map{height:300px;border-radius:10px;margin-top:10px;}
+.small{font-size:12px;color:var(--muted);}
+.beneficiary-list li{font-size:13px;padding:6px 0;border-bottom:1px dashed var(--border);}
+.priority-badge{display:inline-block;background:#eef6f1;color:var(--primary-dark);border-radius:8px;padding:8px 12px;font-weight:700;margin-top:10px;}
+</style>
+</head>
+<body>
+
+<header class="app-header">
+  <img id="appLogo" src="" alt="logo" onerror="this.style.display='none'">
+  <div class="titles">
+    <h1 id="appName">ग्रामपंचायत कार्य व्यवस्थापन</h1>
+    <p id="appHeading">लाभार्थी कार्य नोंद प्रणाली</p>
+  </div>
+  <div style="margin-left:auto;text-align:right;">
+    <div style="font-size:11px;"><span class="sync-dot" style="width:9px;height:9px;border-radius:50%;background:#7fe0a7;display:inline-block;margin-right:5px;"></span>सिंक</div>
+    <div id="developerCredit" style="font-size:10px;opacity:.85;margin-top:3px;"></div>
+  </div>
+</header>
+
+<div class="container">
+
+  <!-- ===== LOGIN SCREEN ===== -->
+  <div id="loginScreen" class="card">
+    <h2>🔐 लॉगिन</h2>
+    <div id="mobileStep">
+      <label>तुमचे नाव <span style="color:var(--danger)">*</span></label>
+      <input type="text" id="nameInput" placeholder="ग्रामपंचायत कर्मचाऱ्याचे नाव" oninput="this.value=this.value.replace(/[^A-Za-zअ-ह\u0900-\u097F\s.]/g,'')">
+      <label>मोबाईल क्रमांक <span style="color:var(--danger)">*</span></label>
+      <input type="tel" id="mobileInput" maxlength="10" placeholder="10 अंकी मोबाईल क्रमांक" oninput="this.value=this.value.replace(/[^0-9]/g,'').slice(0,10)">
+      <button class="btn-primary" style="margin-top:14px" onclick="requestOtp()">OTP पाठवा (WhatsApp)</button>
+    </div>
+    <div id="otpStep" class="hidden">
+      <p class="small" id="otpHint"></p>
+      <label>OTP प्रविष्ट करा</label>
+      <input type="tel" id="otpInput" maxlength="4" placeholder="4 अंकी OTP" oninput="this.value=this.value.replace(/[^0-9]/g,'').slice(0,4)">
+      <button class="btn-primary" style="margin-top:14px" onclick="verifyOtp()">लॉगिन करा</button>
+      <button class="btn-outline" style="margin-top:8px" onclick="backToMobile()">← मागे जा</button>
+    </div>
+  </div>
+
+  <!-- ===== MAIN APP (after login) ===== -->
+  <div id="mainApp" class="hidden">
+
+    <div class="card">
+      <h2>📍 ठिकाण निवडा</h2>
+      <label>जिल्हा</label>
+      <select id="districtSel" onchange="onDistrictChange()"></select>
+      <label>तालुका</label>
+      <select id="talukaSel" onchange="onTalukaChange()"></select>
+
+      <label>ग्रामपंचायत शोधा</label>
+      <input type="text" id="gpSearch" placeholder="टाइप करून यादी गाळा..." oninput="rebuildGpOptions()">
+      <label>ग्रामपंचायत निवडा</label>
+      <select id="gpSel" onchange="onGpChange()"><option value="">-- आधी जिल्हा व तालुका निवडा --</option></select>
+
+      <div id="gpInfo" class="hidden">
+        <label>ग्रामपंचायत पत्ता</label>
+        <input type="text" id="gpAddress" placeholder="पत्ता">
+        <div class="grid2">
+          <div><label>ग्रामपंचायत अधिकारी नाव</label><input type="text" id="gpOfficerName"></div>
+          <div><label>अधिकारी मोबाईल</label><input type="tel" id="gpOfficerMobile" maxlength="10"></div>
+        </div>
+        <div class="grid2">
+          <div><label>ग्राम रोजगार सहाय्यक नाव</label><input type="text" id="rsName"></div>
+          <div><label>सहाय्यक मोबाईल</label><input type="tel" id="rsMobile" maxlength="10"></div>
+        </div>
+        <p class="small">ही माहिती शीटमधून आपोआप येते. नसेल किंवा बदलायची असेल तर इथेच टाइप करून खाली "जतन करा" दाबा — मग ती सर्वांना कायम दिसेल.</p>
+        <button class="btn-outline" onclick="saveOfficerDetails()">💾 तपशील जतन करा (सर्वांसाठी)</button>
+      </div>
+    </div>
+
+    <div id="beneficiaryForm" class="card hidden">
+      <h2>👤 लाभार्थी तपशील</h2>
+      <label>लाभार्थीचे नाव</label>
+      <input type="text" id="beneficiaryName" placeholder="पूर्ण नाव">
+      <label>लाभार्थी प्रकार</label>
+      <select id="beneficiaryType" onchange="onBenTypeChange()">
+        <option value="">-- निवडा --</option>
+        <option value="वैयक्तिक">वैयक्तिक</option>
+        <option value="सार्वजनिक">सार्वजनिक</option>
+      </select>
+
+      <div id="individualFieldsWrap" class="hidden">
+        <label>प्रवर्ग</label>
+        <select id="socialCategory">
+          <option value="">-- निवडा --</option>
+          <option value="अनुसूचित जाती">अनुसूचित जाती</option>
+          <option value="अनुसूचित जमाती">अनुसूचित जमाती</option>
+          <option value="इतर मागासवर्ग">इतर मागासवर्ग</option>
+          <option value="सर्वसाधारण">सर्वसाधारण</option>
+        </select>
+        <label>कुटुंब रचना</label>
+        <select id="familyComposition">
+          <option value="">-- निवडा --</option>
+          <option value="शेतकरी लाभार्थी">शेतकरी लाभार्थी</option>
+          <option value="मजूर लाभार्थी">मजूर लाभार्थी</option>
+          <option value="अपंग लाभार्थी">अपंग लाभार्थी</option>
+          <option value="इतर लाभार्थी">इतर लाभार्थी</option>
+        </select>
+      </div>
+
+      <h2 style="margin-top:20px">🛠️ कामाचा तपशील</h2>
+      <label>यंत्रणा</label>
+      <select id="yantra">
+        <option value="">-- निवडा --</option>
+        <option value="ग्रामपंचायत">ग्रामपंचायत</option>
+        <option value="कृषि विभाग">कृषि विभाग</option>
+        <option value="रेशीम विभाग">रेशीम विभाग</option>
+        <option value="लघु पाटबंधारे">लघु पाटबंधारे</option>
+        <option value="वनविभाग">वनविभाग</option>
+        <option value="सामाजिक वनीकरण">सामाजिक वनीकरण</option>
+        <option value="सार्वजनिक बांधकाम विभाग">सार्वजनिक बांधकाम विभाग</option>
+      </select>
+
+      <label>काम निवडा</label>
+      <select id="workSel" onchange="onWorkChange()"><option value="">-- आधी लाभार्थी प्रकार निवडा --</option></select>
+
+      <div class="grid3">
+        <div><label>कामाचा मुख्य प्रकार</label><input type="text" id="workMainType" readonly></div>
+        <div><label>कामाचा उप प्रकार</label><input type="text" id="workSubType" readonly></div>
+        <div><label>कामाची कॅटेगरी</label><input type="text" id="workCategory" readonly></div>
+      </div>
+
+      <div class="grid2">
+        <div><label>परिमाण</label><input type="text" id="parimaanUnit" readonly></div>
+        <div><label>आकडा (परिमाणाचा)</label><input type="number" id="quantity" min="0" oninput="calcAmounts()"></div>
+      </div>
+
+      <div class="grid2">
+        <div><label>कुशल रक्कम (₹)</label><input type="number" id="skilledAmount" readonly></div>
+        <div><label>अकुशल रक्कम (₹)</label><input type="number" id="unskilledAmount" readonly></div>
+      </div>
+      <div class="grid2">
+        <div><label>एकूण रक्कम (₹)</label><input type="number" id="totalAmount" readonly></div>
+        <div><label>संभाव्य मनुष्यदिन</label><input type="number" id="manDays" readonly></div>
+      </div>
+
+      <h2 style="margin-top:20px">🗺️ कामाचे ठिकाण</h2>
+      <label>ठिकाण प्रकार</label>
+      <select id="locationType" onchange="onLocTypeChange()">
+        <option value="">-- निवडा --</option>
+        <option value="गट नंबर">गट नंबर</option>
+        <option value="मिळकत नंबर">मिळकत नंबर</option>
+      </select>
+      <div id="plotNumWrap" class="hidden">
+        <label id="plotNumLabel">नंबर</label>
+        <input type="text" id="plotNumber" placeholder="नंबर टाका" oninput="onPlotNumberInput()">
+        <p class="small" id="plotNumHint"></p>
+        <div class="btn-row" style="margin-top:10px">
+          <button class="btn-outline" onclick="openMap()">नकाशावर जागा निवडा (उपग्रह/रस्ता) 📍</button>
+          <button class="btn-outline" onclick="openBhunaksha()">भूनकाशा उघडा 🗺️</button>
+        </div>
+        <div id="map" class="hidden"></div>
+        <div class="grid2" style="margin-top:10px">
+          <div><label>अक्षांश (Latitude)</label><input type="text" id="latBox" readonly></div>
+          <div><label>रेखांश (Longitude)</label><input type="text" id="lngBox" readonly></div>
+        </div>
+      </div>
+
+      <button class="btn-primary" id="saveBenBtn" style="margin-top:20px" onclick="saveBeneficiary()">✅ हा लाभार्थी सेव्ह करा</button>
+    </div>
+
+    <div class="card">
+      <h2>📋 आत्तापर्यंत सेव्ह केलेले लाभार्थी (<span id="savedCount">0</span>)</h2>
+      <ul id="savedList" class="beneficiary-list small"></ul>
+      <button class="btn-accent" style="margin-top:14px" onclick="finalizeAll()">🏁 संपूर्ण माहिती सेव्ह करा</button>
+    </div>
+
+    <div id="exportCard" class="card hidden">
+      <h2>🖨️ अहवाल तयार करा (Landscape)</h2>
+      <label>अहवाल प्रकार</label>
+      <select id="reportFormatSel">
+        <option value="kruti">कृती आराखडा</option>
+        <option value="yuktdhara">युक्तधारा प्रणाली आराखडा</option>
+      </select>
+      <div class="btn-row" style="margin-top:12px">
+        <button class="btn-outline" onclick="exportPDF()">PDF डाउनलोड</button>
+        <button class="btn-outline" onclick="exportExcel()">Excel डाउनलोड</button>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<script>
+/* ============ भाषा शेपिंग योग्य होण्यासाठी - खरा फॉन्ट CSS मध्येही जोडतो ============ */
+(function registerCssFont(){
+  const style = document.createElement('style');
+  style.textContent = `@font-face{font-family:'NotoDevanagariEmbedded';src:url(data:font/truetype;base64,${NOTO_DEVANAGARI_TTF_BASE64}) format('truetype');}
+  .pdf-render-area{position:fixed; left:-99999px; top:0; background:#fff; font-family:'NotoDevanagariEmbedded','Noto Sans Devanagari',sans-serif;}
+  .pdf-render-area table{border-collapse:collapse;}
+  .pdf-render-area td, .pdf-render-area th{border:1px solid #000; padding:4px 6px; font-size:13px; text-align:center; vertical-align:middle;}
+  .pdf-render-area th{background:#93c47d; font-weight:bold; color:#000;}
+  .pdf-render-area .hdr-line{text-align:center; margin:2px 0;}`;
+  document.head.appendChild(style);
+})();
+
+/* ============ सेटिंग्ज ============ */
+const API_URL = "https://script.google.com/macros/s/AKfycbyL0_0exFgHuIGp2ep-uqKc9VDEZoCskcYA9FX_ytJwbIr3T7I0OQZMqc5Jwpz7G5Cq/exec";
+const SYNC_INTERVAL_MS = 10 * 60 * 1000;
+const MANDAYS_DIVISOR = 317; // प्रत्येक कामाच्या व एकुण एकत्रच्या मनुष्यदिन साठी
+const LAKH = 100000;
+
+let STATE = {
+  user: null, districts: [], talukas: [], gramPanchayats: [], config: {}, workCatalog: [],
+  district: '', taluka: '', gp: '', gpDetail: null, currentWork: null,
+  gpOptionsFull: [], editingIndex: null,
+  savedBeneficiaries: [], map: null, marker: null
+};
+
+/* ============ API हेल्पर ============ */
+async function apiGet(action, params={}){
+  const qs = new URLSearchParams({action, ...params}).toString();
+  const res = await fetch(`${API_URL}?${qs}`);
+  return res.json();
+}
+async function apiPost(action, data={}){
+  const res = await fetch(API_URL, {method:'POST', body: JSON.stringify({action, ...data})});
+  return res.json();
+}
+function toast(msg){
+  const t=document.createElement('div');
+  t.style.cssText='position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:#1c2b25;color:#fff;padding:12px 22px;border-radius:30px;font-size:14px;z-index:999;box-shadow:0 4px 14px rgba(0,0,0,.25);';
+  t.textContent=msg;
+  document.body.appendChild(t); setTimeout(()=>t.remove(),2800);
+}
+
+/* ============ अ‍ॅप उघडताच आपोआप सिंक ============ */
+window.addEventListener('load', async ()=>{
+  await syncAll();
+  setInterval(syncAll, SYNC_INTERVAL_MS);
+});
+
+async function syncAll(){
+  const dot = document.querySelector('.sync-dot');
+  dot.style.background = '#f2a30f';
+  try{
+    const [cfgRes, locRes] = await Promise.all([apiGet('config'), apiGet('allLocations')]);
+    if(cfgRes.ok){
+      STATE.config = cfgRes.data;
+      document.getElementById('appName').textContent = STATE.config.AppName || 'ग्रामपंचायत कार्य व्यवस्थापन';
+      document.getElementById('appHeading').textContent = STATE.config.HeadingText || '';
+      if(STATE.config.LogoUrl) document.getElementById('appLogo').src = STATE.config.LogoUrl;
+      const devName = STATE.config.DeveloperName, devMobile = STATE.config.DeveloperMobile;
+      document.getElementById('developerCredit').textContent = (devName||devMobile)
+        ? `विकसित: ${devName||''} ${devMobile?'('+devMobile+')':''}` : '';
+      localStorage.setItem('gp_config', JSON.stringify(cfgRes.data));
+    }
+    if(locRes.ok){
+      STATE.districts = locRes.data.districts;
+      STATE.talukas = locRes.data.talukas;
+      STATE.gramPanchayats = locRes.data.gramPanchayats;
+      localStorage.setItem('gp_locdata', JSON.stringify(locRes.data));
+      populateDistricts();
+    }
+  }catch(err){
+    const c = localStorage.getItem('gp_config'); if(c){STATE.config=JSON.parse(c);}
+    const l = localStorage.getItem('gp_locdata');
+    if(l){
+      const d = JSON.parse(l);
+      STATE.districts = d.districts; STATE.talukas = d.talukas; STATE.gramPanchayats = d.gramPanchayats;
+      populateDistricts();
+    }
+  }
+  dot.style.background = '#7fe0a7';
+}
+
+/* ============ लॉगिन ============ */
+let lastMobile='';
+async function requestOtp(){
+  const mobile = document.getElementById('mobileInput').value.trim();
+  const name = document.getElementById('nameInput').value.trim();
+  if(!name){toast('कृपया तुमचे नाव टाका');return;}
+  if(mobile.length!==10){toast('कृपया योग्य 10 अंकी मोबाईल क्रमांक टाका');return;}
+  lastMobile = mobile;
+  const res = await apiPost('sendOtp',{mobile, name});
+  if(!res.ok){toast(res.error);return;}
+  document.getElementById('mobileStep').classList.add('hidden');
+  document.getElementById('otpStep').classList.remove('hidden');
+  document.getElementById('otpHint').textContent = res.demoOtp
+    ? `(डेमो मोड) पाठवलेला OTP: ${res.demoOtp}` : `WhatsApp वर OTP पाठवला आहे`;
+}
+function backToMobile(){
+  document.getElementById('otpStep').classList.add('hidden');
+  document.getElementById('mobileStep').classList.remove('hidden');
+}
+async function verifyOtp(){
+  const otp = document.getElementById('otpInput').value.trim();
+  const name = document.getElementById('nameInput').value.trim();
+  const res = await apiPost('verifyOtp',{mobile:lastMobile, otp, name});
+  if(!res.ok){toast(res.error);return;}
+  STATE.user = res.user;
+  document.getElementById('loginScreen').classList.add('hidden');
+  document.getElementById('mainApp').classList.remove('hidden');
+  toast(`स्वागत आहे, ${res.user.Name}`);
+}
+
+/* ============ कॅस्केडिंग: जिल्हा -> तालुका -> ग्रामपंचायत ============ */
+function populateDistricts(){
+  const sel=document.getElementById('districtSel');
+  sel.innerHTML='<option value="">-- जिल्हा निवडा --</option>';
+  STATE.districts.forEach(d=>sel.innerHTML+=`<option>${d.District}</option>`);
+}
+
+function onDistrictChange(){
+  STATE.district = document.getElementById('districtSel').value.trim();
+  const sel=document.getElementById('talukaSel');
+  sel.innerHTML='<option value="">-- तालुका निवडा --</option>';
+  STATE.talukas.filter(t=>String(t.District).trim()===STATE.district)
+    .forEach(t=>sel.innerHTML+=`<option>${t.Taluka}</option>`);
+  document.getElementById('gpSearch').value='';
+  document.getElementById('gpSel').innerHTML='<option value="">-- आधी तालुका निवडा --</option>';
+  document.getElementById('gpInfo').classList.add('hidden');
+  document.getElementById('beneficiaryForm').classList.add('hidden');
+}
+
+function onTalukaChange(){
+  STATE.taluka = document.getElementById('talukaSel').value.trim();
+  STATE.gpOptionsFull = STATE.gramPanchayats.filter(g=>
+    String(g.District).trim()===STATE.district && String(g.Taluka).trim()===STATE.taluka);
+  document.getElementById('gpSearch').value='';
+  rebuildGpOptions();
+  document.getElementById('gpInfo').classList.add('hidden');
+  document.getElementById('beneficiaryForm').classList.add('hidden');
+}
+
+function rebuildGpOptions(){
+  const typed = document.getElementById('gpSearch').value.trim().toLowerCase();
+  const sel = document.getElementById('gpSel');
+  const matches = typed
+    ? STATE.gpOptionsFull.filter(g=>String(g.GramPanchayat).toLowerCase().includes(typed))
+    : STATE.gpOptionsFull;
+  if(!STATE.taluka){ sel.innerHTML = '<option value="">-- आधी जिल्हा व तालुका निवडा --</option>'; return; }
+  if(matches.length===0){ sel.innerHTML = '<option value="">-- या तालुक्यात गावं सापडली नाहीत --</option>'; return; }
+  sel.innerHTML = '<option value="">-- ग्रामपंचायत निवडा --</option>' +
+    matches.map((g,idx)=>`<option value="${idx}">${g.GramPanchayat}</option>`).join('');
+}
+
+// एका बेस रेकॉर्डवरून सर्व व्युत्पन्न (derived) फील्ड्स तयार करतो — नवीन सेव्ह आणि आधी सेव्ह
+// झालेल्या (शीटमधून परत आणलेल्या) रेकॉर्ड्स दोन्हीसाठी हेच वापरतो, जेणेकरून सुसंगतता राहते
+function buildFullRecord(base){
+  const isPublic = base.beneficiaryType === 'सार्वजनिक';
+  const isIndividual = base.beneficiaryType === 'वैयक्तिक';
+  const { baseQty, unit: parsedUnit } = parseParimaan(base.unit);
+  const totalQty = baseQty * Number(base.quantity||0);
+  // शीटवर फक्त अंतिम आकडा + एककाचं अनेकवचन (उदा. "300 Mtrs", "3 units") — संपूर्ण समीकरण किंवा मूळ मजकूर नाही
+  const result = (base.quantity && parsedUnit) ? `${totalQty} ${parsedUnit}s` : '';
+  const skilled = Number(base.skilled)||0;
+  const unskilled = Number(base.unskilled)||0;
+  const total = Number(base.total)||0;
+  const manDays = Number(base.manDays)||0;
+
+  return {
+    recordId: base.recordId||'', srNo: base.srNo||0,
+    district: base.district, taluka: base.taluka, gp: base.gp,
+    gpAddress: base.gpAddress, gpOfficerName: base.gpOfficerName, gpOfficerMobile: base.gpOfficerMobile,
+    rojgarSahayakName: base.rojgarSahayakName, rojgarSahayakMobile: base.rojgarSahayakMobile,
+    yantra: base.yantra, beneficiaryName: base.beneficiaryName, beneficiaryType: base.beneficiaryType,
+    category: base.category, parimaanUnit: base.unit, quantity: base.quantity,
+    skilledAmount: skilled, unskilledAmount: unskilled, totalAmount: total, manDays,
+    workName: base.workName, workMainType: base.workMainType, workSubType: base.workSubType,
+    priority: base.priority, locationType: base.locationType, plotNumber: base.plotNumber,
+    latitude: base.latitude, longitude: base.longitude, savedBy: base.savedBy,
+    socialCategory: isIndividual ? base.socialCategory : '',
+    familyComposition: isIndividual ? base.familyComposition : '',
+
+    publicWorkName: isPublic ? base.workName : '',
+    publicResult: isPublic ? result : '',
+    publicUnskilledLakh: isPublic ? (unskilled/LAKH) : '',
+    publicSkilledLakh: isPublic ? (skilled/LAKH) : '',
+    publicOtherLakh: isPublic ? 0 : '',
+    publicTotalLakh: isPublic ? (total/LAKH) : '',
+    publicManDays: isPublic ? manDays : '',
+
+    individualWorkName: isIndividual ? base.workName : '',
+    individualBeneficiaryName: isIndividual ? base.beneficiaryName : '',
+    individualResult: isIndividual ? result : '',
+    individualUnskilledLakh: isIndividual ? (unskilled/LAKH) : '',
+    individualSkilledLakh: isIndividual ? (skilled/LAKH) : '',
+    individualTotalLakh: isIndividual ? (total/LAKH) : '',
+    individualManDays: isIndividual ? manDays : '',
+
+    totalResult: result,
+    totalUnskilledLakh: unskilled/LAKH,
+    totalSkilledLakh: skilled/LAKH,
+    totalOtherLakh: 0,
+    totalCostLakh: total/LAKH,
+    totalManDays: Math.round(unskilled / MANDAYS_DIVISOR)
+  };
+}
+
+// कच्च्या Beneficiaries लॉगमधल्या (PascalCase हेडर) रांगेला परत app च्या base-field रूपात आणतो
+function baseFromRawLog(raw){
+  return {
+    recordId: raw.RecordId, district: raw.District, taluka: raw.Taluka, gp: raw.GramPanchayat,
+    gpAddress: raw.GPAddress, gpOfficerName: raw.GPOfficerName, gpOfficerMobile: raw.GPOfficerMobile,
+    rojgarSahayakName: raw.RojgarSahayakName, rojgarSahayakMobile: raw.RojgarSahayakMobile,
+    yantra: raw.Yantra, beneficiaryName: raw.BeneficiaryName, beneficiaryType: raw.BeneficiaryType,
+    socialCategory: raw.SocialCategory, familyComposition: raw.FamilyComposition,
+    workName: raw.WorkName, workMainType: raw.WorkMainType, workSubType: raw.WorkSubType,
+    category: raw.Category, unit: raw.ParimaanUnit, quantity: raw.Quantity,
+    skilled: raw.SkilledAmount, unskilled: raw.UnskilledAmount, total: raw.TotalAmount, manDays: raw.ManDays,
+    priority: raw.Priority, locationType: raw.LocationType, plotNumber: raw.PlotNumber,
+    latitude: raw.Latitude, longitude: raw.Longitude, savedBy: raw.SavedBy
+  };
+}
+
+// ग्रामपंचायत निवडताच त्या गावचे आधी सेव्ह झालेले सर्व लाभार्थी परत आणून यादीत दाखवतो —
+// जेणेकरून आधीचा आराखडा "दिसतो" आणि पुढे एडिट/काढणं/डाउनलोड करता येतो
+async function loadExistingRecordsForGp(gp){
+  try{
+    const res = await apiGet('beneficiaries', {gp});
+    if(res.ok && res.data && res.data.length){
+      STATE.savedBeneficiaries = res.data.map(raw=>buildFullRecord(baseFromRawLog(raw)));
+      renderSavedList();
+      toast(`या ग्रामपंचायतीचे आधीचे ${res.data.length} लाभार्थी लोड झाले — यादीत बघा, एडिट/काढा करता येईल`);
+    } else {
+      STATE.savedBeneficiaries = [];
+      renderSavedList();
+    }
+  }catch(err){
+    // ऑफलाईन असल्यास काहीच लोड होणार नाही, यादी रिकामी राहील — नवीन नोंदी अजूनही करता येतील
+  }
+}
+
+function onGpChange(){
+  const idx = document.getElementById('gpSel').value;
+  if(idx===''){ return; }
+  const typed = document.getElementById('gpSearch').value.trim().toLowerCase();
+  const matches = typed
+    ? STATE.gpOptionsFull.filter(g=>String(g.GramPanchayat).toLowerCase().includes(typed))
+    : STATE.gpOptionsFull;
+  const detail = matches[Number(idx)];
+  if(!detail) return;
+  STATE.gp = String(detail.GramPanchayat).trim();
+  STATE.gpDetail = detail;
+  document.getElementById('gpAddress').value = detail.Address || '';
+  document.getElementById('gpOfficerName').value = detail.GP_Officer_Name || '';
+  document.getElementById('gpOfficerMobile').value = detail.GP_Officer_Mobile || '';
+  document.getElementById('rsName').value = detail.RojgarSahayak_Name || '';
+  document.getElementById('rsMobile').value = detail.RojgarSahayak_Mobile || '';
+  document.getElementById('gpInfo').classList.remove('hidden');
+  document.getElementById('beneficiaryForm').classList.remove('hidden');
+
+  // या ग्रामपंचायतीचे आधी सेव्ह झालेले लाभार्थी असतील तर ते परत आणून दाखवतो (एडिट/काढणं/एकत्र डाउनलोडसाठी)
+  loadExistingRecordsForGp(STATE.gp);
+}
+
+async function saveOfficerDetails(){
+  if(!STATE.gp){ toast('आधी ग्रामपंचायत निवडा'); return; }
+  const payload = {
+    district: STATE.district, taluka: STATE.taluka, gp: STATE.gp,
+    address: document.getElementById('gpAddress').value,
+    officerName: document.getElementById('gpOfficerName').value,
+    officerMobile: document.getElementById('gpOfficerMobile').value,
+    sahayakName: document.getElementById('rsName').value,
+    sahayakMobile: document.getElementById('rsMobile').value
+  };
+  const res = await apiPost('upsertGpOfficer', payload);
+  if(res.ok){
+    toast('तपशील जतन झाले ✅ — आता सर्वांना दिसतील');
+    let d = STATE.gramPanchayats.find(g=>g.GramPanchayat===STATE.gp && g.Taluka===STATE.taluka && g.District===STATE.district);
+    if(d){ Object.assign(d, {Address:payload.address, GP_Officer_Name:payload.officerName, GP_Officer_Mobile:payload.officerMobile, RojgarSahayak_Name:payload.sahayakName, RojgarSahayak_Mobile:payload.sahayakMobile}); }
+    else{ STATE.gramPanchayats.push({District:STATE.district, Taluka:STATE.taluka, GramPanchayat:STATE.gp, ...payload}); }
+    STATE.gpOptionsFull = STATE.gramPanchayats.filter(g=>String(g.District).trim()===STATE.district && String(g.Taluka).trim()===STATE.taluka);
+    localStorage.setItem('gp_locdata', JSON.stringify({districts:STATE.districts, talukas:STATE.talukas, gramPanchayats:STATE.gramPanchayats}));
+  }else{
+    toast('जतन करताना त्रुटी: '+res.error);
+  }
+}
+
+/* ============ लाभार्थी प्रकार -> सामाजिक प्रवर्ग/कुटुंब रचना फील्ड्स + काम यादी ============ */
+function onBenTypeChangeToggleFields(){
+  const type = document.getElementById('beneficiaryType').value;
+  document.getElementById('individualFieldsWrap').classList.toggle('hidden', type!=='वैयक्तिक');
+}
+
+async function onBenTypeChange(){
+  onBenTypeChangeToggleFields();
+  const type = document.getElementById('beneficiaryType').value;
+  const sel = document.getElementById('workSel');
+  sel.innerHTML='<option value="">लोड होत आहे...</option>';
+  const res = await apiGet('workCatalog',{beneficiaryType:type});
+  STATE.workCatalog = res.data || [];
+  sel.innerHTML='<option value="">-- काम निवडा --</option>';
+  STATE.workCatalog.forEach((w,idx)=>sel.innerHTML+=`<option value="${idx}">${w.WorkName}</option>`);
+}
+
+// काम निवडताच परिमाण (WorkCatalog मधून) आपोआप दाखवतो — मॅन्युअली निवडायचं नाही
+function onWorkChange(){
+  const idx = document.getElementById('workSel').value;
+  const w = STATE.workCatalog[Number(idx)];
+  if(!w) return;
+  STATE.currentWork = w;
+  document.getElementById('workMainType').value = w.WorkMainType||'';
+  document.getElementById('workSubType').value = w.WorkSubType||'';
+  document.getElementById('workCategory').value = w.Category||'';
+  document.getElementById('parimaanUnit').value = w.ParimaanUnit||'';
+
+  if(!w.ParimaanUnit){
+    toast('⚠️ या कामाचं परिमाण WorkCatalog शीटमध्ये रिकामं आहे — तिथे "ParimaanUnit" कॉलममध्ये मीटर/नग/संख्या भरा, नाहीतर सेव्ह होणार नाही');
+  }
+
+  document.getElementById('quantity').value='';
+  calcAmounts();
+}
+
+// परिमाण "मीटर" असेल तर WorkCatalog मधला दर आधी संदर्भ-परिमाणाने भागून प्रति-मीटर दर काढतो,
+// मग यूजरने दिलेल्या आकड्याने गुणतो. इतर परिमाणांसाठी (संख्या/नग) दर थेट आकड्याने गुणतो.
+// WorkCatalog मधलं परिमाण एकत्रित मजकूर म्हणून असतं (उदा. "100 Mtr", "1 unit") —
+// यातून आकडा (baseQty) आणि एकक (unit) वेगळं काढतो. आकडा नसेल तर baseQty=1 धरतो.
+function parseParimaan(text){
+  const str = String(text||'').trim();
+  const match = str.match(/^(\d+(?:\.\d+)?)\s*(.*)$/);
+  if(match && match[2]){
+    return { baseQty: Number(match[1])||1, unit: match[2].trim() };
+  }
+  return { baseQty: 1, unit: str };
+}
+
+function calcAmounts(){
+  const w = STATE.currentWork;
+  if(!w){ return; }
+  const qty = Number(document.getElementById('quantity').value)||0;
+  const { baseQty } = parseParimaan(w.ParimaanUnit);
+
+  // सर्व प्रकारांसाठी एकच सूत्र: दर÷baseQty×आकडा. संख्या/नग साठी baseQty साधारण 1 असतो,
+  // त्यामुळे आपोआप थेट गुणाकारासारखंच काम करतं — वेगळा "मीटर" अपवाद लागत नाही.
+  const skilledRate = (Number(w.SkilledRatePerUnit)||0) / (baseQty || 1);
+  const unskilledRate = (Number(w.UnskilledRatePerUnit)||0) / (baseQty || 1);
+
+  const skilled = skilledRate * qty;
+  const unskilled = unskilledRate * qty;
+  const total = skilled + unskilled;
+  const manDays = unskilled > 0 ? Math.round(unskilled / MANDAYS_DIVISOR) : 0;
+
+  document.getElementById('skilledAmount').value = Math.round(skilled);
+  document.getElementById('unskilledAmount').value = Math.round(unskilled);
+  document.getElementById('totalAmount').value = Math.round(total);
+  document.getElementById('manDays').value = manDays;
+}
+
+/* ============ कामाचे ठिकाण + नकाशा ============ */
+function onLocTypeChange(){
+  const type = document.getElementById('locationType').value;
+  document.getElementById('plotNumWrap').classList.toggle('hidden', !type);
+  document.getElementById('plotNumLabel').textContent = type==='गट नंबर' ? 'गट नंबर' : 'मिळकत नंबर';
+  document.getElementById('plotNumber').value='';
+  document.getElementById('plotNumHint').textContent = type==='गट नंबर' ? 'फक्त आकडे टाकता येतील' : '';
+}
+
+// गट नंबर मध्ये फक्त आकडे टाकता येतात; मिळकत नंबरमध्ये अक्षर-आकडे दोन्ही चालतात (उदा. 123/A)
+function onPlotNumberInput(){
+  const type = document.getElementById('locationType').value;
+  const el = document.getElementById('plotNumber');
+  if(type==='गट नंबर'){
+    el.value = el.value.replace(/[^0-9]/g,'');
+  }
+}
+
+function openMap(){
+  const mapDiv = document.getElementById('map');
+  mapDiv.classList.remove('hidden');
+  if(!STATE.map){
+    const streetLayer = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{attribution:'© OpenStreetMap'});
+    const satelliteLayer = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',{attribution:'© Esri, Maxar, Earthstar Geographics'});
+    STATE.map = L.map('map', { layers:[streetLayer] }).setView([19.0, 74.0], 8);
+    L.control.layers({ 'रस्ता नकाशा': streetLayer, 'उपग्रह नकाशा': satelliteLayer }).addTo(STATE.map);
+    STATE.map.on('click', function(e){
+      if(STATE.marker) STATE.map.removeLayer(STATE.marker);
+      STATE.marker = L.marker(e.latlng).addTo(STATE.map);
+      document.getElementById('latBox').value = e.latlng.lat.toFixed(6);
+      document.getElementById('lngBox').value = e.latlng.lng.toFixed(6);
+    });
+    if(navigator.geolocation){
+      navigator.geolocation.getCurrentPosition(pos=>{
+        STATE.map.setView([pos.coords.latitude,pos.coords.longitude],14);
+      });
+    }
+  }
+  setTimeout(()=>STATE.map.invalidateSize(),200);
+}
+
+function openBhunaksha(){
+  window.open('https://mahabhunakasha.mahabhumi.gov.in/27/index.html', '_blank');
+  toast('भूनकाशा पोर्टलवर जिल्हा/तालुका/गाव निवडून नकाशा पहा');
+}
+
+/* ============ लाभार्थी सेव्ह करणे (नवीन किंवा एडिट) ============ */
+async function saveBeneficiary(){
+  const btn = document.getElementById('saveBenBtn');
+  if(btn.disabled) return; // चुकून दुसऱ्यांदा दाबल्यास काहीच होणार नाही
+  btn.disabled = true;
+  btn.textContent = 'सेव्ह होत आहे...';
+
+  try{
+    const beneficiaryType = document.getElementById('beneficiaryType').value;
+    const isIndividual = beneficiaryType === 'वैयक्तिक';
+    const workName = STATE.currentWork ? STATE.currentWork.WorkName : '';
+    const unit = document.getElementById('parimaanUnit').value;
+    const quantity = document.getElementById('quantity').value;
+    const beneficiaryName = document.getElementById('beneficiaryName').value;
+    const locationType = document.getElementById('locationType').value;
+    const plotNumber = document.getElementById('plotNumber').value;
+    const yantra = document.getElementById('yantra').value;
+
+    if(!beneficiaryName || !beneficiaryType || !workName || !unit || !quantity || !locationType || !plotNumber || !yantra){
+      toast('कृपया सर्व आवश्यक माहिती भरा'); return;
+    }
+
+    const isEditing = STATE.editingIndex !== null && STATE.editingIndex !== undefined;
+    const existing = isEditing ? STATE.savedBeneficiaries[STATE.editingIndex] : null;
+
+    // एडिट करताना जुनाच प्राधान्यक्रम कायम ठेवतो; नवीन नोंदीला सर्व्हरकडून नवा क्रमांक मिळतो
+    let priority = existing ? existing.priority : null;
+    if(!priority){
+      const prRes = await apiPost('getNextPriority', {district:STATE.district, taluka:STATE.taluka, gp:STATE.gp});
+      priority = prRes.ok ? prRes.priority : (STATE.savedBeneficiaries.length+1);
+    }
+
+    const base = {
+      recordId: existing ? existing.recordId : '',
+      srNo: existing ? existing.srNo : STATE.savedBeneficiaries.length + 1,
+      district: STATE.district, taluka: STATE.taluka, gp: STATE.gp,
+      gpAddress: document.getElementById('gpAddress').value,
+      gpOfficerName: document.getElementById('gpOfficerName').value,
+      gpOfficerMobile: document.getElementById('gpOfficerMobile').value,
+      rojgarSahayakName: document.getElementById('rsName').value,
+      rojgarSahayakMobile: document.getElementById('rsMobile').value,
+      yantra, beneficiaryName, beneficiaryType,
+      category: STATE.currentWork ? (STATE.currentWork.Category||'') : '',
+      unit, quantity,
+      skilled: Number(document.getElementById('skilledAmount').value)||0,
+      unskilled: Number(document.getElementById('unskilledAmount').value)||0,
+      total: Number(document.getElementById('totalAmount').value)||0,
+      manDays: Number(document.getElementById('manDays').value)||0,
+      workName, workMainType: document.getElementById('workMainType').value,
+      workSubType: document.getElementById('workSubType').value,
+      priority, locationType, plotNumber,
+      latitude: document.getElementById('latBox').value,
+      longitude: document.getElementById('lngBox').value,
+      savedBy: STATE.user.Name,
+      socialCategory: isIndividual ? document.getElementById('socialCategory').value : '',
+      familyComposition: isIndividual ? document.getElementById('familyComposition').value : ''
+    };
+
+    const d = buildFullRecord(base);
+
+    if(isEditing && existing.recordId){
+      const res = await apiPost('updateBeneficiaryRecord', {data:d});
+      if(!res.ok){toast('अपडेट करताना त्रुटी: '+res.error); return;}
+      STATE.savedBeneficiaries[STATE.editingIndex] = d;
+      toast('लाभार्थी अपडेट झाला ✅');
+    }else{
+      const res = await apiPost('saveBeneficiary',{data:d});
+      if(!res.ok){toast('सेव्ह करताना त्रुटी: '+res.error); return;}
+      d.recordId = res.recordId;
+      STATE.savedBeneficiaries.push(d);
+      toast(`लाभार्थी सेव्ह झाला ✅ (प्राधान्यक्रम: ${priority})`);
+    }
+
+    STATE.editingIndex = null;
+    renderSavedList();
+    resetForm();
+  } finally {
+    btn.disabled = false;
+    btn.textContent = '✅ हा लाभार्थी सेव्ह करा';
+  }
+}
+
+function renderSavedList(){
+  document.getElementById('savedCount').textContent = STATE.savedBeneficiaries.length;
+  document.getElementById('savedList').innerHTML = STATE.savedBeneficiaries.map((b,i)=>
+    `<li>#${b.priority} — ${b.beneficiaryName} — ${b.workName} (${b.category||'-'}) — ₹${b.totalAmount}
+      <button style="width:auto;padding:4px 10px;font-size:11px;background:var(--primary);color:#fff;margin-left:8px" onclick="editSavedItem(${i})">एडिट</button>
+      <button style="width:auto;padding:4px 10px;font-size:11px;background:var(--danger);color:#fff;margin-left:4px" onclick="deleteSavedItem(${i})">काढा</button>
+    </li>`).join('');
+}
+
+// आधीची नोंद फॉर्ममध्ये भरून एडिट करण्याची सोय — सेव्ह केल्यावर नवी रांग न बनता तीच अपडेट होते
+async function editSavedItem(index){
+  const item = STATE.savedBeneficiaries[index];
+  document.getElementById('beneficiaryName').value = item.beneficiaryName;
+  document.getElementById('beneficiaryType').value = item.beneficiaryType;
+  document.getElementById('socialCategory').value = item.socialCategory||'';
+  document.getElementById('familyComposition').value = item.familyComposition||'';
+  document.getElementById('yantra').value = item.yantra||'';
+
+  await onBenTypeChange();
+  const widx = STATE.workCatalog.findIndex(w=>w.WorkName===item.workName);
+  if(widx>-1){
+    document.getElementById('workSel').value = widx;
+    onWorkChange();
+  }
+  document.getElementById('quantity').value = item.quantity;
+  calcAmounts();
+
+  document.getElementById('locationType').value = item.locationType;
+  onLocTypeChange();
+  document.getElementById('plotNumber').value = item.plotNumber;
+  document.getElementById('latBox').value = item.latitude;
+  document.getElementById('lngBox').value = item.longitude;
+
+  STATE.editingIndex = index;
+  document.getElementById('saveBenBtn').textContent = '✏️ बदल जतन करा (एडिट)';
+  toast('माहिती फॉर्ममध्ये भरली आहे — बदल करून खाली सेव्ह करा');
+  window.scrollTo({top:0, behavior:'smooth'});
+}
+
+// चुकून चुकीची माहिती भरली गेली असेल तर ("संपूर्ण माहिती सेव्ह करा" दाबण्याआधी) ती कधीही काढून टाकता येते
+async function deleteSavedItem(index){
+  const item = STATE.savedBeneficiaries[index];
+  if(!confirm(`"${item.beneficiaryName} — ${item.workName}" ही नोंद काढायची आहे का?`)) return;
+  if(item.recordId) await apiPost('deleteBeneficiaryRecord', {recordId:item.recordId});
+  STATE.savedBeneficiaries.splice(index,1);
+  renderSavedList();
+  toast('नोंद काढली ✅');
+}
+
+function resetForm(){
+  STATE.editingIndex = null;
+  document.getElementById('saveBenBtn').textContent = '✅ हा लाभार्थी सेव्ह करा';
+  document.getElementById('beneficiaryName').value='';
+  document.getElementById('beneficiaryType').value='';
+  onBenTypeChangeToggleFields();
+  document.getElementById('socialCategory').value='';
+  document.getElementById('familyComposition').value='';
+  document.getElementById('yantra').value='';
+  document.getElementById('workSel').innerHTML='<option value="">-- आधी लाभार्थी प्रकार निवडा --</option>';
+  ['workMainType','workSubType','workCategory','parimaanUnit','skilledAmount','unskilledAmount','totalAmount','manDays','plotNumber','quantity'].forEach(id=>document.getElementById(id).value='');
+  document.getElementById('locationType').value='';
+  document.getElementById('plotNumHint').textContent='';
+  document.getElementById('plotNumWrap').classList.add('hidden');
+  document.getElementById('map').classList.add('hidden');
+  document.getElementById('latBox').value='';
+  document.getElementById('lngBox').value='';
+  STATE.currentWork=null;
+  if(STATE.marker && STATE.map){STATE.map.removeLayer(STATE.marker); STATE.marker=null;}
+  window.scrollTo({top:0,behavior:'smooth'});
+}
+
+/* ============ संपूर्ण माहिती सेव्ह -> ग्रामपंचायत+वर्षाच्या स्वतःच्या फॉरमॅट केलेल्या शीटमध्ये ============ */
+async function finalizeAll(){
+  if(STATE.savedBeneficiaries.length===0){toast('अजून कोणताही लाभार्थी सेव्ह केलेला नाही'); return;}
+  const res = await apiPost('finalizeSave',{records: STATE.savedBeneficiaries});
+  toast(res.message || 'सर्व माहिती सेव्ह झाली');
+  document.getElementById('exportCard').classList.remove('hidden');
+}
+
+/* ============ हेडर मजकूर ============ */
+function headerBlockLines(type){
+  const cfg = STATE.config;
+  const englishLine = cfg.SchemeNameEnglish || '';
+  const marathiLine = `${cfg.SchemeNameMarathi || ''} वर्ष - ${cfg.SchemeYear || ''} आराखडा`;
+  const gpName = STATE.gp || '';
+  const officer = `${document.getElementById('gpOfficerName').value || ''} मो. ${document.getElementById('gpOfficerMobile').value || ''}`;
+  const sahayak = `${document.getElementById('rsName').value || ''} मो. ${document.getElementById('rsMobile').value || ''}`;
+
+  if(type==='kruti'){
+    return [
+      englishLine, marathiLine,
+      `सन ${cfg.SchemeYear||''} साठी ग्रामपंचायत निहाय कामाचे नियोजन (WORK PROJECTION) ५०% ग्रामपंचायत यंत्रणा + ५०% शासकीय यंत्रणा)`,
+      `ग्रामपंचायत - ${gpName}, तालुका - ${STATE.taluka}, जि. - ${STATE.district}   (रक्कम लाखात)`
+    ];
+  }
+  return [
+    englishLine, marathiLine,
+    `ग्रामपंचायत - ${gpName}, ता. - ${STATE.taluka}, जि. - ${STATE.district}`,
+    `ग्रामपंचायत अधिकारी - ${officer}`,
+    `ग्राम रोजगार सहाय्यक - ${sahayak}`
+  ];
+}
+
+async function getReportData(type){
+  const all = STATE.savedBeneficiaries;
+  const fmtRes = await apiGet('reportFormat',{type});
+  const format = (fmtRes.data||[]).sort((a,b)=>a.Order-b.Order);
+  const fieldMap = format.length ? format.map(f=>f.MapsFromField) : Object.keys(all[0]||{});
+  const rows = all.map(b=>fieldMap.map(f=>b[f] ?? ''));
+  return { rows, fieldMap };
+}
+
+// संपूर्ण अहवालाचा खरा HTML टेबल बनवतो (जोडाक्षरं व्यवस्थित दिसण्यासाठी हेच नंतर इमेज म्हणून PDF मध्ये बसवलं जातं)
+const KRUTI_SUM_COLS_0BASED = [6,7,8,9,10, 16,17,18,19, 21,22,23,24,25];
+
+function computeKrutiTotalsRow(rows){
+  if(rows.length===0) return null;
+  const totalRow = new Array(rows[0].length).fill('');
+  totalRow[0] = 'एकूण';
+  KRUTI_SUM_COLS_0BASED.forEach(c=>{
+    totalRow[c] = rows.reduce((acc,r)=> acc + (Number(r[c])||0), 0);
+  });
+  return totalRow;
+}
+
+function buildReportHtml(type, headerBlockText, headRows, rows, cfg){
+  let html = '<div>';
+  const logoHtml = cfg && cfg.LogoUrl ? `<img src="${cfg.LogoUrl}" style="height:50px;float:left;">` : '';
+  const devText = cfg && (cfg.DeveloperName||cfg.DeveloperMobile) ? `विकसित: ${cfg.DeveloperName||''} ${cfg.DeveloperMobile?'('+cfg.DeveloperMobile+')':''}` : '';
+  html += `<div style="overflow:auto;"><div style="float:left;width:60px;">${logoHtml}</div><div style="float:right;font-size:9px;color:#555;">${devText}</div><div style="text-align:center;">`;
+  headerBlockText.forEach((line,i)=>{
+    const color = i===0 ? '#CC0000' : (i===1 ? '#0000CC' : '#000000');
+    const size = i===0||i===1 ? '16px' : '14px';
+    html += `<div class="hdr-line" style="color:${color};font-size:${size};font-weight:bold;">${line}</div>`;
+  });
+  html += '</div></div>';
+  html += '<table>';
+  if(type==='kruti'){
+    const [row1cells, row2] = headRows;
+    html += '<tr>';
+    row1cells.forEach(c=>{ html += `<th colspan="${c.colSpan||1}" rowspan="${c.rowSpan||1}">${c.content}</th>`; });
+    html += '</tr><tr>';
+    row2.forEach(h=>{ html += `<th>${h}</th>`; });
+    html += '</tr>';
+  }else{
+    html += '<tr>'; headRows[0].forEach(h=>{ html += `<th>${h}</th>`; }); html += '</tr>';
+  }
+  rows.forEach(r=>{ html += '<tr>' + r.map(c=>`<td>${c===''||c===undefined||c===null?'&nbsp;':c}</td>`).join('') + '</tr>'; });
+  if(type==='kruti'){
+    const totalRow = computeKrutiTotalsRow(rows);
+    if(totalRow){
+      html += '<tr style="background:#93c47d;font-weight:bold;">' + totalRow.map(c=>`<td>${c===''?'&nbsp;':c}</td>`).join('') + '</tr>';
+    }
+  }
+  html += '</table></div>';
+  return html;
+}
+
+async function exportPDF(){
+  const type = document.getElementById('reportFormatSel').value;
+  const {rows} = await getReportData(type);
+  const reportLabel = type==='kruti' ? 'कृती आराखडा' : 'युक्तधारा प्रणाली आराखडा';
+  const headRows = type==='kruti' ? krutiHeadRows() : [yuktdharaHeadRow()];
+
+  const container = document.createElement('div');
+  container.className = 'pdf-render-area';
+  container.style.width = '1600px';
+  container.innerHTML = buildReportHtml(type, headerBlockLines(type), headRows, rows, STATE.config);
+  document.body.appendChild(container);
+
+  toast('PDF तयार होत आहे, थोडं थांबा...');
+  const canvas = await html2canvas(container, { scale:2, backgroundColor:'#ffffff' });
+  document.body.removeChild(container);
+
+  const {jsPDF} = window.jspdf;
+  const doc = new jsPDF({orientation:'landscape', unit:'pt', format:'a4'});
+  const pageW = doc.internal.pageSize.getWidth();
+  const pageH = doc.internal.pageSize.getHeight();
+  const margin = 20;
+  const usableW = pageW - margin*2;
+  const usableH = pageH - margin*2;
+
+  const scaleFactor = usableW / canvas.width;
+  const pagePixelHeight = Math.floor(usableH / scaleFactor);
+
+  let renderedPx = 0, pageNum = 0;
+  while(renderedPx < canvas.height){
+    const sliceHeight = Math.min(pagePixelHeight, canvas.height - renderedPx);
+    const pageCanvas = document.createElement('canvas');
+    pageCanvas.width = canvas.width;
+    pageCanvas.height = sliceHeight;
+    const ctx = pageCanvas.getContext('2d');
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(0,0,pageCanvas.width, pageCanvas.height);
+    ctx.drawImage(canvas, 0, renderedPx, canvas.width, sliceHeight, 0, 0, canvas.width, sliceHeight);
+
+    if(pageNum>0) doc.addPage();
+    doc.addImage(pageCanvas.toDataURL('image/jpeg', 0.92), 'JPEG', margin, margin, usableW, sliceHeight*scaleFactor);
+
+    renderedPx += sliceHeight;
+    pageNum++;
+  }
+
+  doc.save(`${reportLabel}.pdf`);
+}
+
+function krutiHeadRows(){
+  return [
+    [
+      {content:'अ.क्र.', rowSpan:2}, {content:'ग्रामपंचायत', rowSpan:2}, {content:'यंत्रणा', rowSpan:2}, {content:'कामाचा प्रकार', rowSpan:2},
+      {content:'सार्वजनिक कामे', colSpan:7},
+      {content:'वैयक्तीक कामे', colSpan:9},
+      {content:'एकुण एकत्र', colSpan:6}
+    ],
+    [
+      'कामाचे नाव','परिमाण','अकुशल','कुशल','इतर योजना अभिसरणकामांसाठी','एकुण','मनुष्यदिन',
+      'कुटूंब रचणा','कामाचे नाव','लाभार्थीचे नाव','प्रवर्ग','परिमाण','अकुशल','कुशल','एकुण','मनुष्यदिन',
+      'परिमाण','अकुशल','कुशल','इतर योजना अभिसरणकामांसाठी','एकुण','मनुष्यदिन'
+    ]
+  ];
+}
+function yuktdharaHeadRow(){
+  return ['अ.क्र.','कामाचे नाव','लाभार्थीचे नाव','अक्षांश','रेखांश','प्राधान्यक्रम','कामाचा मुख्य प्रकार','कामाचा उप प्रकार','कामाची कॅटेगरी'];
+}
+
+async function exportExcel(){
+  const type = document.getElementById('reportFormatSel').value;
+  const {rows} = await getReportData(type);
+  const reportLabel = type==='kruti' ? 'कृती आराखडा' : 'युक्तधारा प्रणाली आराखडा';
+  const totalCols = type==='kruti' ? 26 : 9;
+
+  const wb = new ExcelJS.Workbook();
+  const ws = wb.addWorksheet('Report', { pageSetup: { orientation: 'landscape', fitToPage: true } });
+
+  const thinBorder = { top:{style:'thin'}, bottom:{style:'thin'}, left:{style:'thin'}, right:{style:'thin'} };
+  const colLetter = n => { let s=''; while(n>0){ const m=(n-1)%26; s=String.fromCharCode(65+m)+s; n=Math.floor((n-1)/26); } return s; };
+
+  function mergeCenterRow(rowNum, text, opts, colStart, colEndOverride){
+    const startCol = colStart || 1;
+    const endCol = colEndOverride || totalCols;
+    ws.mergeCells(`${colLetter(startCol)}${rowNum}:${colLetter(endCol)}${rowNum}`);
+    const cell = ws.getCell(`${colLetter(startCol)}${rowNum}`);
+    cell.value = text;
+    cell.alignment = { horizontal:'center', vertical:'middle', wrapText:true };
+    cell.font = { bold: opts.bold!==false, size: opts.size||12, color:{argb: opts.color||'FF000000'} };
+  }
+
+  function addDeveloperCredit(rowNum, colStart){
+    const devName = STATE.config.DeveloperName, devMobile = STATE.config.DeveloperMobile;
+    if(!devName && !devMobile) return;
+    const text = `विकसित: ${devName||''} ${devMobile?'('+devMobile+')':''}`;
+    mergeCenterRow(rowNum, text, {bold:false, size:8, color:'FF555555'}, colStart, totalCols);
+  }
+
+  // लोगो डावीकडे बसवतो (Config मध्ये LogoUrl दिलेला असल्यास)
+  async function addLogoIfPresent(){
+    if(!STATE.config.LogoUrl) return;
+    try{
+      const resp = await fetch(STATE.config.LogoUrl);
+      const buf = await resp.arrayBuffer();
+      const ext = STATE.config.LogoUrl.toLowerCase().includes('.png') ? 'png' : 'jpeg';
+      const imgId = wb.addImage({ buffer: buf, extension: ext });
+      ws.addImage(imgId, { tl:{col:0, row:0}, ext:{width:50, height:50} });
+    }catch(err){ /* लोगो आणता आला नाही तरी बाकी एक्सपोर्ट व्यवस्थित होईल */ }
+  }
+  await addLogoIfPresent();
+
+  const lines = headerBlockLines(type);
+  let r = 1;
+  if(type==='kruti'){
+    mergeCenterRow(r, lines[0], {size:16, color:'FFCC0000'}, 1, 24);
+    addDeveloperCredit(r, 25); r++;
+    mergeCenterRow(r, lines[1], {size:16, color:'FF0000CC'}, 1, 24); r++;
+    mergeCenterRow(r++, lines[2], {size:12, color:'FF000000'});
+    mergeCenterRow(r++, lines[3], {size:11, color:'FF000000'});
+
+    // गट-शीर्षक रांग (row5-7 समतुल्य) — मध्यम हिरवा, बोल्ड, बॉर्डर
+    const [row1cells, row2] = krutiHeadRows();
+    const headerStartRow = r;
+    let col=1;
+    row1cells.forEach(c=>{
+      const span=(c.colSpan||1);
+      if(c.rowSpan===2){
+        ws.mergeCells(headerStartRow,col,headerStartRow+1,col);
+      } else if(span>1){
+        ws.mergeCells(headerStartRow,col,headerStartRow,col+span-1);
+      }
+      const cell = ws.getCell(headerStartRow,col);
+      cell.value = c.content;
+      col += span;
+    });
+    row2.forEach((h,i)=>{ ws.getCell(headerStartRow+1, i+5).value = h; }); // उपशीर्षकं col5 पासून सुरू (A-D आधीच rowSpan2 आहेत)
+    // A-D साठी वेगळे लेबल (rowSpan आधीच केलेले, फक्त value भरायचं)
+    ['अ.क्र.','ग्रामपंचायत','यंत्रणा','कामाचा प्रकार'].forEach((h,i)=>{ ws.getCell(headerStartRow,i+1).value=h; });
+
+    const headRange = ws.getRows(headerStartRow, 2);
+    for(let rr=headerStartRow; rr<=headerStartRow+1; rr++){
+      for(let cc=1; cc<=totalCols; cc++){
+        const cell = ws.getCell(rr,cc);
+        cell.fill = { type:'pattern', pattern:'solid', fgColor:{argb:'FF93C47D'} };
+        cell.font = { bold:true, color:{argb:'FF000000'}, size:10 };
+        cell.alignment = { horizontal:'center', vertical:'middle', wrapText:true };
+        cell.border = thinBorder;
+      }
+    }
+    r = headerStartRow + 2;
+  }else{
+    mergeCenterRow(r, lines[0], {size:16, color:'FF000000'}, 1, 7);
+    addDeveloperCredit(r, 8); r++;
+    mergeCenterRow(r, lines[1], {size:16, color:'FF0000CC'}, 1, 7); r++;
+    mergeCenterRow(r++, lines[2], {size:12, color:'FF000000'});
+    mergeCenterRow(r++, lines[3], {size:12, color:'FF000000'});
+    mergeCenterRow(r++, lines[4], {size:12, color:'FF000000'});
+    r++; // रिकामी रांग
+    const head = yuktdharaHeadRow();
+    head.forEach((h,i)=>{ ws.getCell(r,i+1).value = h; });
+    for(let cc=1; cc<=totalCols; cc++){
+      const cell = ws.getCell(r,cc);
+      cell.fill = { type:'pattern', pattern:'solid', fgColor:{argb:'FF93C47D'} };
+      cell.font = { bold:true, color:{argb:'FF000000'}, size:10 };
+      cell.alignment = { horizontal:'center', vertical:'middle' };
+      cell.border = thinBorder;
+    }
+    r++;
+  }
+
+  // डेटा रांगा — सर्व सेल्सना बॉर्डर
+  rows.forEach(rowVals=>{
+    rowVals.forEach((val,i)=>{
+      const cell = ws.getCell(r, i+1);
+      cell.value = val;
+      cell.border = thinBorder;
+      cell.alignment = { horizontal:'center', vertical:'middle' };
+    });
+    r++;
+  });
+
+  // कृती आराखड्यासाठी शेवटी अकुशल/कुशल/एकुण/मनुष्यदिन बेरजेची हिरवी रांग
+  if(type==='kruti'){
+    const totalRow = computeKrutiTotalsRow(rows);
+    if(totalRow){
+      totalRow.forEach((val,i)=>{
+        const cell = ws.getCell(r, i+1);
+        cell.value = val===''? '' : val;
+        cell.border = thinBorder;
+        cell.fill = { type:'pattern', pattern:'solid', fgColor:{argb:'FF93C47D'} };
+        cell.font = { bold:true };
+        cell.alignment = { horizontal:'center', vertical:'middle' };
+      });
+      r++;
+    }
+  }
+
+  for(let c=1;c<=totalCols;c++){ ws.getColumn(c).width = 16; }
+
+  const buffer = await wb.xlsx.writeBuffer();
+  const blob = new Blob([buffer], {type:'application/octet-stream'});
+  const link = document.createElement('a');
+  link.href = URL.createObjectURL(blob);
+  link.download = `${reportLabel}.xlsx`;
+  link.click();
+}
+
+/* ============ Service worker नोंदणी ============ */
+if('serviceWorker' in navigator){
+  window.addEventListener('load',()=>navigator.serviceWorker.register('sw.js').catch(()=>{}));
+}
+</script>
+</body>
+</html>
